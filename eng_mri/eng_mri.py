@@ -1,8 +1,6 @@
 import os
 import re
-import codecs
 import cleantext
-import operator
 from joblib import dump, load
 from pathlib import Path
 import tensorflow as tf
@@ -54,9 +52,10 @@ class Tokenizer(object):
 class LID(object):
 
 	#---------
-	def __init__(self, model_name = "v20.10.NZ.Trigrams_v2.25k.50x2_layers", sample_size = 20):
+	def __init__(self, model_name = "v24.2.NZ.Multi.Ngrams_v1.50k.50x1_layers", sample_size = 20, ngrams = (2, 4)):
 
 		self.langs_total = ["eng", "mri"]
+		self.predict = self.predict_v2
 		
 		#Create dictionary for labels
 		self.label_to_lang = {}
@@ -71,8 +70,8 @@ class LID(object):
 		self.model_file = Path(__file__).parent / os.path.join(".", self.model_name)
 		
 		#Set feature name
-		if "25k" in model_name:
-			self.feature_name = "trigrams.NZ.25k.v2.joblib"
+		if model_name == "v24.2.NZ.Multi.Ngrams_v1.50k.50x1_layers":
+			self.feature_name = "trigrams.NZ.50k.v2.joblib"
 		
 		#Initialize encoder
 		from .eng_mri import Tokenizer
@@ -82,23 +81,21 @@ class LID(object):
 		self.vocabulary_set = load(Path(__file__).parent / os.path.join(".", self.feature_name))
 		self.vocab_size = len(self.vocabulary_set)
 
-		with open(os.path.join(".","pacificLID","pacificLID", self.feature_name), "rb") as fo:
-			features = load(fo)
-			self.encoder = CountVectorizer(
+		self.encoder = CountVectorizer(
 					input = "content", 
 					encoding = "utf-8", 
 					decode_error = "ignore", 
 					strip_accents = None, 
 					lowercase = True, 
-					tokenizer = None,
-					ngram_range = (3, 3), 
+					preprocessor = self.Tokenizer.clean_line,
+					ngram_range = ngrams, 
 					analyzer = "char_wb", 
-					vocabulary = features, 
+					vocabulary = self.vocabulary_set, 
 					binary = False
 					)
 			
-			self.encoder.vocab_size = len(features)
-			self.encoder.encode = self.encoder.transform
+		self.encoder.vocab_size = len(self.vocabulary_set)
+		self.encoder.encode = self.encoder.transform
 
 		#Load pre-trained model
 		self.model = tf.keras.models.load_model(Path(__file__).parent / os.path.join(".", self.model_file))
@@ -106,10 +103,11 @@ class LID(object):
 		return
 
 	#----------
-	def predict(self, line):
+	def predict_v1(self, line):
 	
 		#Clean it
-		line = self.Tokenizer.clean_line(line)
+		overall = self.model.predict(self.encoder.encode([line]))
+		print(overall, line)
 		
 		#Get all sub-sequences
 		window_pre = [line[:i] for i in range(1,10)]
@@ -125,8 +123,37 @@ class LID(object):
 			
 		#Get word and summed probability
 		text = [line[word[0]:word[1]] for word in words]
-		label = ["mri" if probabilities[word[0]:word[1]].mean(axis = 0)[1] > 0.5 else "eng" for word in words]
+		label = [probabilities[word[0]:word[1]].mean(axis = 0)[1] for word in words]
 			
 		return text, label
+	
+	#----------
+
+	def predict_v2(self, line):
+	
+		#Clean it and get overall prediction
+		line = self.Tokenizer.clean_line(line)
+		overall_pred = self.model.predict(self.encoder.encode([line]))[0][1]
+
+		line_list = line.split()
+		line_return = []
+		
+		for i in range(len(line_list)):
+		
+			#Get current word and its prediction
+			word = line_list[i]
+			word_pred = self.model.predict(self.encoder.encode([word]))[0][1]
+			
+			#Get sequence trigram around word and its prediction
+			start = max(0, i-1)
+			stop = min(i+2, len(line_list))
+			context = " ".join(line_list[start:stop])
+			context_pred = self.model.predict(self.encoder.encode([context]))[0][1]
+
+			#Take the smallest and adjust by overall prediction
+			pred = min(word_pred, context_pred) * overall_pred
+			line_return.append((word, pred))
+						
+		return line_return, overall_pred
 	
 	#----------
