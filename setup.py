@@ -18,7 +18,7 @@ setup(
 	url = "https://github.com/jonathandunn/eng_mri.git",
 	keywords = "language id, code switching, mri",
 	packages = find_packages(exclude=["*.pyc", "__pycache__"]),
-	package_data={'': ['eng_mri.v24.2.NZ.Multi.Ngrams_v1.50k.50x1_layers.*',]},
+	package_data={'': ['eng_mri.v24.2.NZ.Multi.Ngrams_v1.50k.50x1_layers.*','eng_mri.*']},
 	install_requires=["cytoolz",
 						"numpy",
 						"sklearn",

@@ -3,7 +3,10 @@ import re
 import cleantext
 from joblib import dump, load
 from pathlib import Path
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
+
 import numpy as np
 import cytoolz as ct
 from sklearn.feature_extraction.text import CountVectorizer

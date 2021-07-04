@@ -4,4 +4,5 @@ include setup.py
 include setup.cfg
 include MANIFEST.in
 
+graft eng_mri/
 graft eng_mri/v24.2.NZ.Multi.Ngrams_v1.50k.50x1_layers
